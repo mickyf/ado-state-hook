@@ -1,20 +1,20 @@
 {
-  "name": "ado-hook-node",
+  "name": "ado-state-hook",
   "version": "1.0.0",
   "description": "",
-  "main": "index.ts",
   "scripts": {
     "build": "tsc",
-    "start-only": "node dist/index.js",
-    "start": "tsc && node dist/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start",
+    "test": "echo \"No tests yet...\""
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "azure-devops-node-api": "^10.1.0"
   },
   "devDependencies": {
-    "@types/node": "^13.7.7"
+    "@azure/functions": "^1.2.0",
+    "@types/node": "^13.7.7",
+    "typescript": "^3.8.3"
   }
 }

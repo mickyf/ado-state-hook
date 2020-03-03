@@ -1,11 +1,28 @@
 import * as vm from "azure-devops-node-api";
 import * as lim from "azure-devops-node-api/interfaces/LocationsInterfaces";
 
+const CONFIG = {
+    url: "https://dev.azure.com/wwimmo-mobile",
+    token: "nldfbnnzrhuqzu2l7rqqsff7tuzjteq3xmrf42srkwgizwmuzc6q",
+    project: "mobile"
+};
+
 function getEnv(name: string): string {
+    switch (name) {
+        case "API_URL":
+            return CONFIG.url;
+        case "API_TOKEN":
+            return CONFIG.token;
+        case "API_PROJECT":
+            return CONFIG.project;
+        default:
+            break;
+    }
+
     let val = process.env[name];
     if (!val) {
         console.error(`${name} env var not set`);
-        process.exit(1);
+        throw `${name} env var not set`;
     }
     return val;
 }
@@ -49,8 +66,7 @@ export async function getApi(serverUrl: string): Promise<vm.WebApi> {
             let connData: lim.ConnectionData = await vsts.connect();
             console.log(`Hello ${connData.authenticatedUser?.providerDisplayName}`);
             resolve(vsts);
-        }
-        catch (err) {
+        } catch (err) {
             reject(err);
         }
     });
