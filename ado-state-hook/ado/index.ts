@@ -86,6 +86,32 @@ export async function updateParentWorkItem(wiid: number) {
         return false;
     };
 
+    const someChildDoing = async (wi: WorkItem) => {
+        if (getType(wi) !== WI_TYPES.task) {
+            const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
+            console.log(`checking ${childs.length} childs for doing state`);
+            if (childs.length > 0) {
+                const ids = childs.map((child) => {
+                    const idstr = child.url.substring(child.url.lastIndexOf("/") + 1);
+                    return parseInt(idstr);
+                });
+                const workitems = await witApi.getWorkItems(ids);
+                if (workitems.some((child) => {
+                    const state = getState(child);
+                    if (state === WI_STATES.doing) {
+                        return true;
+                    }
+                })) {
+                    return true
+                }
+                return false;
+            } else {
+                return false;
+            }
+        }
+        return false;
+    };
+
     const allChildsTodo = async (wi: WorkItem) => {
         if (getType(wi) !== WI_TYPES.task) {
             const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
@@ -137,18 +163,17 @@ export async function updateParentWorkItem(wiid: number) {
     common.banner("checking if all childs are done");
     let wi = await witApi.getWorkItem(wiid, undefined, undefined, WorkItemExpand.Relations);
     if (wi) {
-        let state = getState(wi);
         let type = getType(wi);
         console.log(`input type is: ${wi.fields["System.WorkItemType"]}`);
         console.log(`input state is: ${wi.fields["System.State"]}`);
 
         if (type === WI_TYPES.issue) {
             wi = await getParent(wi);
-            state = getState(wi);
+            if (wi === undefined) return;
             type = getType(wi);
         } else if (type === WI_TYPES.task) {
             wi = await getParent(wi);
-            state = getState(wi);
+            if (wi === undefined) return;
             type = getType(wi);
         }
 
@@ -157,18 +182,14 @@ export async function updateParentWorkItem(wiid: number) {
             setState(wi, WI_STATES.done);
         } else {
             console.log("not everything is done, so the parent should not be done");
-            let childstodo = false;
-
-            if (type !== WI_TYPES.task) {
-                childstodo = await allChildsTodo(wi);
-            }
-
-            if (childstodo) {
+            if (await someChildDoing(wi)) {
                 console.log("nothing started, so the parent should be todo");
+                setState(wi, WI_STATES.doing);
+            } else if (await allChildsTodo(wi)) {
+                console.log("nothing in doing and not all done, so the parent should be todo");
                 setState(wi, WI_STATES.todo);
             } else {
-                console.log("something started, so the parent should be doing");
-                setState(wi, WI_STATES.doing);
+                console.log("something went wrong");
             }
         }
     }
