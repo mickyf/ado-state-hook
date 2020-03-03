@@ -60,65 +60,56 @@ export async function updateParentWorkItem(wiid: number) {
         }
     };
 
-    const allChildsDone = (wi: WorkItem) => {
-        switch (getType(wi)) {
-            case WI_TYPES.epic:
-                // nothing to do
-                break;
-            case WI_TYPES.issue:
-                const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
-                console.log(`Child-Count: ${childs.length}`);
-                if (childs.length > 0) {
-                    childs.forEach(async (child) => {
-                        const childwi = await getWorkItemByUrl(child.url);
-                        if (childwi) {
-                            const state = getState(childwi);
-                            if (state !== WI_STATES.done) {
-                                return false;
-                            }
-                        }
-                    });
-                    return true;
-                } else {
-                    return false;
+    const allChildsDone = async (wi: WorkItem) => {
+        if (getType(wi) !== WI_TYPES.task) {
+            const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
+            console.log(`checking ${childs.length} childs for done state`);
+            if (childs.length > 0) {
+                const ids = childs.map((child) => {
+                    const idstr = child.url.substring(child.url.lastIndexOf("/") + 1);
+                    return parseInt(idstr);
+                });
+                const workitems = await witApi.getWorkItems(ids);
+                if (workitems.some((child) => {
+                    const state = getState(child);
+                    if (state !== WI_STATES.done) {
+                        return true;
+                    }
+                })) {
+                    return false
                 }
-            default:
+                return true;
+            } else {
                 return false;
+            }
         }
+        return false;
     };
 
-    const allChildsTodo = (wi: WorkItem) => {
-        switch (getType(wi)) {
-            case WI_TYPES.epic:
-                // nothing to do
-                break;
-            case WI_TYPES.issue:
-                const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
-                console.log(`Child-Count: ${childs.length}`);
-                if (childs.length > 0) {
-                    childs.forEach(async (child) => {
-                        const childwi = await getWorkItemByUrl(child.url);
-                        if (childwi) {
-                            const state = getState(childwi);
-                            if (state !== WI_STATES.todo) {
-                                return false;
-                            }
-                        }
-                    });
-                    return true;
-                } else {
-                    return false;
+    const allChildsTodo = async (wi: WorkItem) => {
+        if (getType(wi) !== WI_TYPES.task) {
+            const childs = wi.relations.filter((rel) => rel.rel === "System.LinkTypes.Hierarchy-Forward");
+            console.log(`checking ${childs.length} childs for todo state`);
+            if (childs.length > 0) {
+                const ids = childs.map((child) => {
+                    const idstr = child.url.substring(child.url.lastIndexOf("/") + 1);
+                    return parseInt(idstr);
+                });
+                const workitems = await witApi.getWorkItems(ids);
+                if (workitems.some((child) => {
+                    const state = getState(child);
+                    if (state !== WI_STATES.todo) {
+                        return true;
+                    }
+                })) {
+                    return false
                 }
-            default:
+                return true;
+            } else {
                 return false;
+            }
         }
-    };
-
-    const getWorkItemByUrl = async (url: string): Promise<WorkItem> => {
-        const idstr = url.substring(url.lastIndexOf("/") + 1);
-        const workitemid = parseInt(idstr);
-        const workitem = await witApi.getWorkItem(workitemid, undefined, undefined, WorkItemExpand.Relations);
-        return workitem;
+        return false;
     };
 
     const getParent = async (wi: WorkItem): Promise<WorkItem> => {
@@ -151,36 +142,32 @@ export async function updateParentWorkItem(wiid: number) {
         console.log(`input type is: ${wi.fields["System.WorkItemType"]}`);
         console.log(`input state is: ${wi.fields["System.State"]}`);
 
-        // check own state (if task and not done itself -> exit)
-        if (type === WI_TYPES.task && state !== WI_STATES.done) {
-            return;
-        }
-        if (type === WI_TYPES.epic) {
-            return;
-        }
-
-        if (type === WI_TYPES.task) {
+        if (type === WI_TYPES.issue) {
+            wi = await getParent(wi);
+            state = getState(wi);
+            type = getType(wi);
+        } else if (type === WI_TYPES.task) {
             wi = await getParent(wi);
             state = getState(wi);
             type = getType(wi);
         }
 
-        if (allChildsDone(wi)) {
-            console.log("everything is done, so the issue should also be done");
+        if (await allChildsDone(wi)) {
+            console.log("everything is done, so the parent should also be done");
             setState(wi, WI_STATES.done);
         } else {
-            console.log("not everything is done, so the issue should not be done");
+            console.log("not everything is done, so the parent should not be done");
             let childstodo = false;
 
-            if (type === WI_TYPES.issue) {
-                childstodo = allChildsTodo(wi);
+            if (type !== WI_TYPES.task) {
+                childstodo = await allChildsTodo(wi);
             }
 
             if (childstodo) {
-                console.log("nothing started, so the issue should be todo");
+                console.log("nothing started, so the parent should be todo");
                 setState(wi, WI_STATES.todo);
             } else {
-                console.log("something started, so the issue should be doing");
+                console.log("something started, so the parent should be doing");
                 setState(wi, WI_STATES.doing);
             }
         }
